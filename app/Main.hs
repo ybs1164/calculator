@@ -5,9 +5,7 @@
 module Main where
 
 import Text.Parsec.String (Parser)
-import Text.Parsec (
-    parse, string, letter, char, (<?>), many1, digit, choice
-  )
+import Text.Parsec
 
 type Var = String
 
@@ -33,25 +31,6 @@ constExp :: Parser Exp
 constExp = do
     d <- many1 digit <?> "digit"
     return $ Const (read d)
-
-
-opExp :: Char -> (Exp -> Exp -> Exp) -> Parser Exp
-opExp c exptype = do
-    left <- startExp
-    char c
-    exptype left <$> startExp
-
-addExp :: Parser Exp
-addExp = opExp '+' Add
-
-subExp :: Parser Exp
-subExp = opExp '-' Sub
-
-mulExp :: Parser Exp
-mulExp = opExp '*' Mul
-
-divExp :: Parser Exp
-divExp = opExp '/' Div
 
 
 parensExp :: Parser Exp
@@ -86,16 +65,40 @@ iszeroExp = do
 
 
 startExp :: Parser Exp
-startExp = choice [letExp, ifExp, iszeroExp, firstExp]
+startExp = do
+    spaces
+    expression <- firstExp
+    spaces
+    return expression
 
 firstExp :: Parser Exp
-firstExp = choice [addExp, subExp, secondExp]
+firstExp = try (do
+    left <- secondExp
+    char '+'
+    Add left <$> firstExp)
+    <|> try (do
+    left <- secondExp
+    char '-'
+    Sub left <$> firstExp)
+    <|> secondExp
 
 secondExp :: Parser Exp
-secondExp = choice [mulExp, divExp, valueExp]
+secondExp = try (do
+    left <- valueExp
+    char '*'
+    Mul left <$> secondExp)
+    <|> try (do
+    left <- valueExp
+    char '/'
+    Div left <$> secondExp)
+    <|> valueExp
 
 valueExp :: Parser Exp
-valueExp = choice [constExp, varExp, parensExp]
+valueExp = do
+    spaces
+    expression <- try constExp <|> try varExp <|> try parensExp
+    spaces
+    return expression
 
 
 run :: Show a => Parser a -> String -> IO ()
